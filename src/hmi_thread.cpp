@@ -110,6 +110,7 @@ void HmiThread::handleConfig() {
     hmiConfig newHmiConfig;
     if (xQueueReceive(_q_hmi_config_in, &newHmiConfig, (TickType_t)0)) {
         hmi_config = newHmiConfig;
+        hmi_config_epoch++; // Signal profile change to reset stateful outputs
     }
 };
 
@@ -329,7 +330,7 @@ void HmiThread::updateValue() {
                 if (v.type==knobValueType::KV_PITCHBEND) {
                     // Use position from haptic system so display matches output
                     static int16_t lastPitchBend = 0;
-                    static uint8_t lastPitchBendChannel = 0xFF; // Invalid channel to force initial send
+                    static uint32_t lastPitchBendEpoch = 0; // Track config changes
 
                     int16_t pos = foc_thread.pass_cur_pos();
                     int16_t start = foc_thread.pass_start_pos();
@@ -347,12 +348,12 @@ void HmiThread::updateValue() {
                     if (pb_value > 8191) pb_value = 8191;
                     if (pb_value < -8192) pb_value = -8192;
 
-                    // Force send on channel change (profile switch) to avoid stale state
-                    bool channelChanged = (v.midi.channel != lastPitchBendChannel);
-                    if (channelChanged) {
-                        lastPitchBendChannel = v.midi.channel;
+                    // Force send on profile switch (epoch change) to sync host state
+                    bool configChanged = (hmi_config_epoch != lastPitchBendEpoch);
+                    if (configChanged) {
+                        lastPitchBendEpoch = hmi_config_epoch;
                         lastPitchBend = pb_value; // Reset state
-                        // Always send current value on channel change
+                        // Always send current value on config change
                         if (midiUsbSettings.nano)
                             midiu.sendPitchBend(pb_value, v.midi.channel);
                         if (midi2Settings.nano)

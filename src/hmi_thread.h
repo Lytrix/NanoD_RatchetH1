@@ -100,6 +100,9 @@ class HmiThread : public Thread<HmiThread> {
         float currentValue;
         void updateValue();
 
+        // HMI config epoch - incremented on profile switch to reset stateful outputs
+        uint32_t hmi_config_epoch = 0;
+
         // midi config
         void handleMidi();
         midiSettings midiUsbSettings;
