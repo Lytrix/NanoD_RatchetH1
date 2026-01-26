@@ -182,15 +182,16 @@ void HapticInterface::find_detent(void)
      * PITCHWHEEL mode: Always attract to center (0). The motor constantly pulls
      * back toward the center point, like a pitch wheel on a MIDI keyboard.
      * Position is still tracked for value output.
-     * Uses a fixed physical range of ±π/2 (quarter turn) for full position range.
+     * Physical range is configurable via angle_range (default: π/2 = quarter turn each direction).
      */
     if(haptic_state.detent_profile.mode == HapticMode::PITCHWHEEL){
         // Keep attract_angle fixed at center
         haptic_state.attract_angle = 0.0;
         haptic_state.last_attract_angle = 0.0;
 
-        // Fixed physical range: quarter turn (π/2 radians) each direction
-        float max_angle = _PI / 2.0f;
+        // Use configured angle range, or default to quarter turn (π/2 radians)
+        float max_angle = haptic_state.detent_profile.angle_range;
+        if(max_angle <= 0.0f) max_angle = _PI / 2.0f;
 
         // Calculate position based on current angle
         int16_t center_pos = (haptic_state.detent_profile.start_pos + haptic_state.detent_profile.end_pos) / 2;

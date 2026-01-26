@@ -58,6 +58,7 @@ typedef struct {
     bool kxForce;
     float output_ramp;
     float detent_strength;
+    float angle_range;      // For PITCHWHEEL: max angle in radians for full deflection (each direction)
 } DetentProfile;
 
 /**

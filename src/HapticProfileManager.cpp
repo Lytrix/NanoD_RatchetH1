@@ -431,6 +431,11 @@ HapticProfile& HapticProfile::operator=(JsonObject& obj) {
           update_field(haptic, kxForce, hmi_config.knob.values[i].haptic.kxForce);
           update_field(haptic, outputRamp, hmi_config.knob.values[i].haptic.output_ramp);
           update_field(haptic, detentStrength, hmi_config.knob.values[i].haptic.detent_strength);
+          // pitchRange is specified in turns (0.25 = quarter turn), convert to radians
+          if (!haptic["pitchRange"].isNull()) {
+            hmi_config.knob.values[i].haptic.angle_range = haptic["pitchRange"].as<float>() * _2PI;
+            dirty = true;
+          }
         }
         String type = value["type"].as<String>();
         if (type=="midi") {
@@ -644,6 +649,9 @@ void HapticProfile::toJSON(JsonObject& doc){
     haptic["kxForce"] = hmi_config.knob.values[i].haptic.kxForce;
     haptic["outputRamp"] = hmi_config.knob.values[i].haptic.output_ramp;
     haptic["detentStrength"] = hmi_config.knob.values[i].haptic.detent_strength;
+    // pitchRange: convert from radians to turns for output
+    if (hmi_config.knob.values[i].haptic.angle_range > 0)
+      haptic["pitchRange"] = hmi_config.knob.values[i].haptic.angle_range / _2PI;
     switch (hmi_config.knob.values[i].type) {
       case knobValueType::KV_MIDI:
         value["type"] = "midi";
