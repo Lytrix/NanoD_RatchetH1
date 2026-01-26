@@ -82,6 +82,10 @@ void HapticState::load_profile(DetentProfile profile, uint16_t new_position = 0x
 
     last_pos = current_pos;
     detent_profile = profile;
+
+    // Apply detent strength from profile (if set, otherwise keep default)
+    if(profile.detent_strength > 0)
+        detent_strength_unit = profile.detent_strength;
 }
 
 HapticState::~HapticState() {};
@@ -174,6 +178,41 @@ void HapticInterface::offset_detent(void){
 */
 void HapticInterface::find_detent(void)
 {
+    /**
+     * PITCHWHEEL mode: Always attract to center (0). The motor constantly pulls
+     * back toward the center point, like a pitch wheel on a MIDI keyboard.
+     * Position is still tracked for value output.
+     */
+    if(haptic_state.detent_profile.mode == HapticMode::PITCHWHEEL){
+        // Keep attract_angle fixed at center
+        haptic_state.attract_angle = 0.0;
+        haptic_state.last_attract_angle = 0.0;
+
+        // Calculate position based on current angle for value output
+        // Center position is midpoint between start and end
+        uint16_t center_pos = (haptic_state.detent_profile.start_pos + haptic_state.detent_profile.end_pos) / 2;
+        int16_t offset = (int16_t)(motor->shaft_angle / haptic_state.detent_width);
+        int16_t new_pos = center_pos + offset;
+
+        // Clamp to valid range
+        if(new_pos < haptic_state.detent_profile.start_pos)
+            new_pos = haptic_state.detent_profile.start_pos;
+        if(new_pos > haptic_state.detent_profile.end_pos)
+            new_pos = haptic_state.detent_profile.end_pos;
+
+        // Fire events on position change
+        if((uint16_t)new_pos != haptic_state.current_pos){
+            haptic_state.last_pos = haptic_state.current_pos;
+            haptic_state.current_pos = (uint16_t)new_pos;
+
+            if(new_pos > haptic_state.last_pos)
+                HapticEventCallback(HapticEvt::INCREASE);
+            else
+                HapticEventCallback(HapticEvt::DECREASE);
+        }
+        return;
+    }
+
     /**
      * hysteresisType is used to handle whether the detents are linear in strength or progressively stronger.
      * We then generate new bounds for the detent based on the hysteresis (as a percentage)

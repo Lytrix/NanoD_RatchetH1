@@ -34,13 +34,15 @@ typedef enum : uint8_t {
  * In regular, the number of detents is determined by end - start position, and the angle is set by detent_count (per 2PI)
  * In vernier mode, the number of detents is multiplied by the vernier multiplier, with "major" clicks where the regular detents would overlay.
  * In viscose mode, the knob is smooth but heavy and resists motion.
- * In spring mode, the knob returns to a defined point.
+ * In spring mode, the knob oscillates like a mass on a spring around where you release it.
+ * In pitchwheel mode, the knob always snaps back to center (like a MIDI pitch bend wheel).
 */
 typedef enum : uint8_t {
-    REGULAR = 0,    //Only coarse detents used
+    REGULAR = 0,    // Only coarse detents used
     VERNIER = 1,    // Coarse with fine between
     VISCOSE = 2,    // Resistance while turning
-    SPRING = 3     // Snap back to center point
+    SPRING = 3,     // Oscillating spring physics
+    PITCHWHEEL = 4  // Snap back to center (like MIDI pitch bend wheel)
 } HapticMode;
 
 /**

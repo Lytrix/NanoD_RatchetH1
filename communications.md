@@ -196,10 +196,11 @@ The response includes all profile fields, and would arrive in one line, but is s
 
 Values for haptic mode:
 
- - REGULAR = 0,    //Only coarse detents used
+ - REGULAR = 0,    // Only coarse detents used
  - VERNIER = 1,    // Coarse with fine between
  - VISCOSE = 2,    // Resistance while turning
- - SPRING = 3     // Snap back to center point
+ - SPRING = 3,     // Oscillating spring physics
+ - PITCHWHEEL = 4  // Snap back to center (like MIDI pitch bend wheel)
 
 
 Changing profiles from keys:
