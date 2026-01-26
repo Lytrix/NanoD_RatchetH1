@@ -275,7 +275,11 @@ Set the current profile:
 { "current": "Fusion2" }
 ```
 
-TODO what would be the best response?
+Response confirms the activated profile:
+
+```json
+{ "current": "Fusion2" }
+```
 
 <hr>
 
