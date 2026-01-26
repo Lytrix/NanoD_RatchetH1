@@ -69,7 +69,7 @@ void FocThread::run() {
     haptic.motor->sensor_offset = haptic.motor->shaft_angle;
     // float lastang = encoder.getAngle();
     // unsigned long ts = micros();
-    uint16_t serial_last_pos = 0;
+    int16_t serial_last_pos = 0;
     while (true) {
         haptic.haptic_loop();
         float ang = encoder.getAngle();
@@ -114,19 +114,19 @@ uint16_t FocThread::pass_actual_pos(){
     return pointer;
 }
 
-uint16_t FocThread::pass_cur_pos(){
+int16_t FocThread::pass_cur_pos(){
     return haptic.haptic_state.current_pos;
 }
 
-uint16_t FocThread::pass_start_pos(){
+int16_t FocThread::pass_start_pos(){
     return haptic.haptic_state.detent_profile.start_pos;
 }
 
-uint16_t FocThread::pass_end_pos(){
+int16_t FocThread::pass_end_pos(){
     return haptic.haptic_state.detent_profile.end_pos;
 }
 
-uint16_t FocThread::pass_last_pos(){
+int16_t FocThread::pass_last_pos(){
     return haptic.haptic_state.last_pos;
 }
 

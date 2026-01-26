@@ -438,6 +438,10 @@ HapticProfile& HapticProfile::operator=(JsonObject& obj) {
           update_field(value, channel, hmi_config.knob.values[i].midi.channel);
           update_field(value, cc, hmi_config.knob.values[i].midi.cc);
         }
+        else if (type=="pitchBend") {
+          hmi_config.knob.values[i].type = knobValueType::KV_PITCHBEND;
+          update_field(value, channel, hmi_config.knob.values[i].midi.channel);
+        }
         else if (type=="mouse") {
           hmi_config.knob.values[i].type = knobValueType::KV_MOUSE;
           dirty = true;
@@ -645,6 +649,10 @@ void HapticProfile::toJSON(JsonObject& doc){
         value["type"] = "midi";
         value["channel"] = hmi_config.knob.values[i].midi.channel;
         value["cc"] = hmi_config.knob.values[i].midi.cc;
+        break;
+      case knobValueType::KV_PITCHBEND:
+        value["type"] = "pitchBend";
+        value["channel"] = hmi_config.knob.values[i].midi.channel;
         break;
       case knobValueType::KV_MOUSE:
         value["type"] = "mouse";

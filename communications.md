@@ -202,6 +202,10 @@ Values for haptic mode:
  - SPRING = 3,     // Oscillating spring physics
  - PITCHWHEEL = 4  // Snap back to center (like MIDI pitch bend wheel)
 
+Knob output types:
+ - midi        // 7-bit MIDI CC (0-127)
+ - pitchBend   // 14-bit MIDI Pitch Bend (-8192 to +8191)
+
 
 Changing profiles from keys:
 

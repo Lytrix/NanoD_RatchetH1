@@ -170,11 +170,11 @@ if (lv_scr_act()==ui_profSelectScreen) // Profile Selection Screen
 
 
 static void counter_handler(lv_timer_t * postimer) {
-    static uint16_t last_pos = -1; // Default Last Position
+    static int16_t last_pos = INT16_MIN; // Default Last Position
     static bool overlay_toggle = false; // Default Overlay Toggle
-    uint16_t pos = foc_thread.pass_cur_pos(); // Get Current Position from FOC Thread
-    uint16_t end_pos = foc_thread.pass_end_pos(); // Get End Position from FOC Thread
-    uint16_t last_end_pos;
+    int16_t pos = foc_thread.pass_cur_pos(); // Get Current Position from FOC Thread
+    int16_t end_pos = foc_thread.pass_end_pos(); // Get End Position from FOC Thread
+    int16_t last_end_pos;
     
     if (pos != last_pos) {
        

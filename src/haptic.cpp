@@ -55,21 +55,21 @@ HapticState::HapticState(DetentProfile profile){
     load_profile(profile, profile.start_pos);
 };
 
-HapticState::HapticState(DetentProfile profile, uint16_t position){
+HapticState::HapticState(DetentProfile profile, int16_t position){
     load_profile(profile, position);
 };
 
-void HapticState::load_profile(DetentProfile profile, uint16_t new_position = 0xFFFF){
-    
-    uint16_t isVernier = profile.mode == HapticMode::VERNIER ? profile.vernier : 1;
-   
+void HapticState::load_profile(DetentProfile profile, int16_t new_position = INT16_MIN){
+
+    int16_t isVernier = profile.mode == HapticMode::VERNIER ? profile.vernier : 1;
+
     num_detents = profile.end_pos - profile.start_pos;
     detent_width = _2PI / profile.detent_count;
 
     if(profile.mode == HapticMode::VERNIER)
         detent_width /= profile.vernier;
 
-    if(new_position != 0xFFFF)
+    if(new_position != INT16_MIN)
         current_pos = new_position;
     else
     {
@@ -182,17 +182,26 @@ void HapticInterface::find_detent(void)
      * PITCHWHEEL mode: Always attract to center (0). The motor constantly pulls
      * back toward the center point, like a pitch wheel on a MIDI keyboard.
      * Position is still tracked for value output.
+     * Uses a fixed physical range of ±π/2 (quarter turn) for full position range.
      */
     if(haptic_state.detent_profile.mode == HapticMode::PITCHWHEEL){
         // Keep attract_angle fixed at center
         haptic_state.attract_angle = 0.0;
         haptic_state.last_attract_angle = 0.0;
 
-        // Calculate position based on current angle for value output
-        // Center position is midpoint between start and end
-        uint16_t center_pos = (haptic_state.detent_profile.start_pos + haptic_state.detent_profile.end_pos) / 2;
-        int16_t offset = (int16_t)(motor->shaft_angle / haptic_state.detent_width);
-        int16_t new_pos = center_pos + offset;
+        // Fixed physical range: quarter turn (π/2 radians) each direction
+        float max_angle = _PI / 2.0f;
+
+        // Calculate position based on current angle
+        int16_t center_pos = (haptic_state.detent_profile.start_pos + haptic_state.detent_profile.end_pos) / 2;
+        int16_t half_range = (haptic_state.detent_profile.end_pos - haptic_state.detent_profile.start_pos) / 2;
+
+        // Map angle to position: normalized angle (-1 to +1) * half_range + center
+        float normalized = motor->shaft_angle / max_angle;
+        if(normalized > 1.0f) normalized = 1.0f;
+        if(normalized < -1.0f) normalized = -1.0f;
+
+        int16_t new_pos = center_pos + (int16_t)(normalized * half_range);
 
         // Clamp to valid range
         if(new_pos < haptic_state.detent_profile.start_pos)
@@ -201,9 +210,9 @@ void HapticInterface::find_detent(void)
             new_pos = haptic_state.detent_profile.end_pos;
 
         // Fire events on position change
-        if((uint16_t)new_pos != haptic_state.current_pos){
+        if(new_pos != haptic_state.current_pos){
             haptic_state.last_pos = haptic_state.current_pos;
-            haptic_state.current_pos = (uint16_t)new_pos;
+            haptic_state.current_pos = new_pos;
 
             if(new_pos > haptic_state.last_pos)
                 HapticEventCallback(HapticEvt::INCREASE);
@@ -257,8 +266,8 @@ void HapticInterface::find_detent(void)
 */
 void HapticInterface::detent_handler(void){
     // Logic for handling detent update events.
-    uint16_t effective_start_pos = haptic_state.detent_profile.start_pos;
-    uint16_t effective_end_pos = haptic_state.detent_profile.end_pos;
+    int16_t effective_start_pos = haptic_state.detent_profile.start_pos;
+    int16_t effective_end_pos = haptic_state.detent_profile.end_pos;
 
     if(haptic_state.detent_profile.mode == HapticMode::VERNIER){
         effective_start_pos *= haptic_state.detent_profile.vernier;

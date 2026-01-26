@@ -51,8 +51,8 @@ typedef enum : uint8_t {
 */
 typedef struct {
     HapticMode mode;
-    uint16_t start_pos;
-    uint16_t end_pos;
+    int16_t start_pos;
+    int16_t end_pos;
     uint16_t detent_count;
     uint8_t vernier;
     bool kxForce;
@@ -65,5 +65,5 @@ typedef struct {
  * if you are using the library as part of a larger system.
 */
 typedef struct {
-    uint16_t cur_pos;
+    int16_t cur_pos;
 } AngleEvt;

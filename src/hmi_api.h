@@ -80,7 +80,8 @@ typedef enum {
     KV_GAMEPAD = 2,
     KV_MIDI = 3,
     KV_ACTIONS = 4,
-    KV_DEVICE_PROFILES = 5 
+    KV_DEVICE_PROFILES = 5,
+    KV_PITCHBEND = 6
 } knobValueType;
 
 
