@@ -171,20 +171,22 @@ if (lv_scr_act()==ui_profSelectScreen) // Profile Selection Screen
 
 static void counter_handler(lv_timer_t * postimer) {
     static int16_t last_pos = INT16_MIN; // Default Last Position
+    static int16_t last_start_pos = INT16_MIN;
+    static int16_t last_end_pos = INT16_MIN;
     static bool overlay_toggle = false; // Default Overlay Toggle
     int16_t pos = foc_thread.pass_cur_pos(); // Get Current Position from FOC Thread
+    int16_t start_pos = foc_thread.pass_start_pos(); // Get Start Position from FOC Thread
     int16_t end_pos = foc_thread.pass_end_pos(); // Get End Position from FOC Thread
-    int16_t last_end_pos;
-    
+
     if (pos != last_pos) {
-       
+
        if (lv_scr_act()==ui_valueScreen){
            lv_label_set_text_fmt(ui_posind, "%d", pos);
            lv_label_set_text_fmt(ui_posindSha, "%d", pos);
-           if (end_pos != last_end_pos) {
-               lv_arc_set_range(ui_Arc1, 0, end_pos);
+           if (start_pos != last_start_pos || end_pos != last_end_pos) {
+               lv_arc_set_range(ui_Arc1, start_pos, end_pos);
+               last_start_pos = start_pos;
                last_end_pos = end_pos;
-               // Don't update arc range if end_pos is same as last_end_pos
            }
            lv_arc_set_value(ui_Arc1, pos);
            last_pos = pos; // Update Last Position
