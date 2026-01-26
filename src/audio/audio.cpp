@@ -278,7 +278,7 @@ void BinarisAudioPlayer::audio_loop(){
 };
 
 
-extern "C" void HapticInterface::UserHapticEventCallback(HapticEvt event, float currentAngle, uint16_t currentPos){
+extern "C" void HapticInterface::UserHapticEventCallback(HapticEvt event, float currentAngle, int16_t currentPos){
   switch (event) {
     case HapticEvt::INCREASE:
         audioPlayer.play_haptic_audio();

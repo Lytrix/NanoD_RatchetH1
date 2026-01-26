@@ -34,13 +34,15 @@ typedef enum : uint8_t {
  * In regular, the number of detents is determined by end - start position, and the angle is set by detent_count (per 2PI)
  * In vernier mode, the number of detents is multiplied by the vernier multiplier, with "major" clicks where the regular detents would overlay.
  * In viscose mode, the knob is smooth but heavy and resists motion.
- * In spring mode, the knob returns to a defined point.
+ * In spring mode, the knob oscillates like a mass on a spring around where you release it.
+ * In pitchwheel mode, the knob always snaps back to center (like a MIDI pitch bend wheel).
 */
 typedef enum : uint8_t {
-    REGULAR = 0,    //Only coarse detents used
+    REGULAR = 0,    // Only coarse detents used
     VERNIER = 1,    // Coarse with fine between
     VISCOSE = 2,    // Resistance while turning
-    SPRING = 3     // Snap back to center point
+    SPRING = 3,     // Oscillating spring physics
+    PITCHWHEEL = 4  // Snap back to center (like MIDI pitch bend wheel)
 } HapticMode;
 
 /**
@@ -49,13 +51,14 @@ typedef enum : uint8_t {
 */
 typedef struct {
     HapticMode mode;
-    uint16_t start_pos;
-    uint16_t end_pos;
+    int16_t start_pos;
+    int16_t end_pos;
     uint16_t detent_count;
     uint8_t vernier;
     bool kxForce;
     float output_ramp;
     float detent_strength;
+    float angle_range;      // For PITCHWHEEL: max angle in radians for full deflection (each direction)
 } DetentProfile;
 
 /**
@@ -63,5 +66,5 @@ typedef struct {
  * if you are using the library as part of a larger system.
 */
 typedef struct {
-    uint16_t cur_pos;
+    int16_t cur_pos;
 } AngleEvt;

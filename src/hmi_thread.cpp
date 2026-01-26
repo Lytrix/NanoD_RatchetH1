@@ -110,6 +110,7 @@ void HmiThread::handleConfig() {
     hmiConfig newHmiConfig;
     if (xQueueReceive(_q_hmi_config_in, &newHmiConfig, (TickType_t)0)) {
         hmi_config = newHmiConfig;
+        hmi_config_epoch++; // Signal profile change to reset stateful outputs
     }
 };
 
@@ -325,7 +326,53 @@ void HmiThread::updateValue() {
                 }
                 currentValue = value;
                 currentValue = foc_thread.pass_cur_pos(); // TODO fix and remove this in future
-                if (currentValue!=lastValue) {
+
+                if (v.type==knobValueType::KV_PITCHBEND) {
+                    // Use position from haptic system so display matches output
+                    static int16_t lastPitchBend = 0;
+                    static uint32_t lastPitchBendEpoch = 0; // Track config changes
+
+                    int16_t pos = foc_thread.pass_cur_pos();
+                    int16_t start = foc_thread.pass_start_pos();
+                    int16_t end = foc_thread.pass_end_pos();
+                    int32_t center = ((int32_t)start + (int32_t)end) / 2;
+                    int32_t half_range = ((int32_t)end - (int32_t)start) / 2;
+
+                    // Map position to pitch bend range (-8192 to 8191)
+                    int16_t pb_value = 0;
+                    if (half_range > 0) {
+                        int32_t offset = (int32_t)pos - center;
+                        pb_value = (int16_t)((offset * 8191L) / half_range);
+                    }
+                    // Clamp to valid pitch bend range
+                    if (pb_value > 8191) pb_value = 8191;
+                    if (pb_value < -8192) pb_value = -8192;
+
+                    // Force send on profile switch (epoch change) to sync host state
+                    bool configChanged = (hmi_config_epoch != lastPitchBendEpoch);
+                    if (configChanged) {
+                        lastPitchBendEpoch = hmi_config_epoch;
+                        lastPitchBend = pb_value; // Reset state
+                        // Always send current value on config change
+                        if (midiUsbSettings.nano)
+                            midiu.sendPitchBend(pb_value, v.midi.channel);
+                        if (midi2Settings.nano)
+                            midi2.sendPitchBend(pb_value, v.midi.channel);
+                    }
+                    else {
+                        // Deadband to filter motor noise
+                        int16_t diff = pb_value - lastPitchBend;
+                        if (diff < 0) diff = -diff;
+                        if (diff > 50) {
+                            if (midiUsbSettings.nano)
+                                midiu.sendPitchBend(pb_value, v.midi.channel);
+                            if (midi2Settings.nano)
+                                midi2.sendPitchBend(pb_value, v.midi.channel);
+                            lastPitchBend = pb_value;
+                        }
+                    }
+                }
+                else if (currentValue!=lastValue) {
                     if (v.type==knobValueType::KV_MIDI) {
                         uint8_t midi_value = (uint8_t)(currentValue);
                         midi_value = _constrain(midi_value, 0, 127);
@@ -440,9 +487,9 @@ void HmiThread::updateKeyLeds() {
 
 void HmiThread::updateLeds() {
     // TODO: optimise this
-    uint16_t cur_pos = foc_thread.pass_cur_pos();
-    uint16_t start_pos = foc_thread.pass_start_pos();
-    uint16_t end_pos = foc_thread.pass_end_pos();
+    int16_t cur_pos = foc_thread.pass_cur_pos();
+    int16_t start_pos = foc_thread.pass_start_pos();
+    int16_t end_pos = foc_thread.pass_end_pos();
     uint8_t device_orientation = DeviceSettings::getInstance().deviceOrientation;
     uint8_t led_orientation = map(device_orientation, 0, 3, 0, 135);
     uint16_t point = map(cur_pos, end_pos, start_pos, 0, NANO_LED_A_NUM - 1);

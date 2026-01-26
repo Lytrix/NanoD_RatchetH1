@@ -64,7 +64,12 @@ void ComThread::run() {
               handleProfileCommand(profile, v);
             }
             if (doc["current"]!=nullptr) { // set current profile
-              setCurrentProfile(doc["current"].as<String>());
+              String profileName = doc["current"].as<String>();
+              setCurrentProfile(profileName);
+              JsonDocument reply;
+              reply["current"] = profileName;
+              serializeJson(reply, Serial);
+              Serial.println();
             }          
             if (doc["R"]!=nullptr) { // motor command
               // send message to FOC thread
