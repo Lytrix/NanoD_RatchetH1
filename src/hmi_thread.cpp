@@ -329,6 +329,8 @@ void HmiThread::updateValue() {
                 if (v.type==knobValueType::KV_PITCHBEND) {
                     // Use position from haptic system so display matches output
                     static int16_t lastPitchBend = 0;
+                    static uint8_t lastPitchBendChannel = 0xFF; // Invalid channel to force initial send
+
                     int16_t pos = foc_thread.pass_cur_pos();
                     int16_t start = foc_thread.pass_start_pos();
                     int16_t end = foc_thread.pass_end_pos();
@@ -345,15 +347,28 @@ void HmiThread::updateValue() {
                     if (pb_value > 8191) pb_value = 8191;
                     if (pb_value < -8192) pb_value = -8192;
 
-                    // Deadband to filter motor noise
-                    int16_t diff = pb_value - lastPitchBend;
-                    if (diff < 0) diff = -diff;
-                    if (diff > 50) {
+                    // Force send on channel change (profile switch) to avoid stale state
+                    bool channelChanged = (v.midi.channel != lastPitchBendChannel);
+                    if (channelChanged) {
+                        lastPitchBendChannel = v.midi.channel;
+                        lastPitchBend = pb_value; // Reset state
+                        // Always send current value on channel change
                         if (midiUsbSettings.nano)
                             midiu.sendPitchBend(pb_value, v.midi.channel);
                         if (midi2Settings.nano)
                             midi2.sendPitchBend(pb_value, v.midi.channel);
-                        lastPitchBend = pb_value;
+                    }
+                    else {
+                        // Deadband to filter motor noise
+                        int16_t diff = pb_value - lastPitchBend;
+                        if (diff < 0) diff = -diff;
+                        if (diff > 50) {
+                            if (midiUsbSettings.nano)
+                                midiu.sendPitchBend(pb_value, v.midi.channel);
+                            if (midi2Settings.nano)
+                                midi2.sendPitchBend(pb_value, v.midi.channel);
+                            lastPitchBend = pb_value;
+                        }
                     }
                 }
                 else if (currentValue!=lastValue) {

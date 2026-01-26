@@ -184,7 +184,10 @@ static void counter_handler(lv_timer_t * postimer) {
            lv_label_set_text_fmt(ui_posind, "%d", pos);
            lv_label_set_text_fmt(ui_posindSha, "%d", pos);
            if (start_pos != last_start_pos || end_pos != last_end_pos) {
-               lv_arc_set_range(ui_Arc1, start_pos, end_pos);
+               // LVGL arc requires min < max; ensure valid range
+               if (start_pos < end_pos) {
+                   lv_arc_set_range(ui_Arc1, start_pos, end_pos);
+               }
                last_start_pos = start_pos;
                last_end_pos = end_pos;
            }

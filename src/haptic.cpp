@@ -220,6 +220,11 @@ void HapticInterface::find_detent(void)
             else
                 HapticEventCallback(HapticEvt::DECREASE);
         }
+
+        // PITCHWHEEL always needs spring force active - clear limit flags
+        // to prevent correct_pid from forcing P=0
+        haptic_state.atLimit = false;
+        haptic_state.wasAtLimit = false;
         return;
     }
 
