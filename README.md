@@ -76,4 +76,6 @@ nanod upload preset.yaml --activate --save
 
 ## License
 
-See the original repository for license information.
+This project is licensed under the **GNU General Public License v3.0** (GPL-3.0). See [LICENSE](LICENSE) for details.
+
+This is required because the project includes the XTI2S audio library which is GPL-3.0 licensed.
