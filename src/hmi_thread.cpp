@@ -1,6 +1,7 @@
 #include "hmi_thread.h"
 #include "com_thread.h"
 #include "foc_thread.h"
+#include "lcd_thread.h"
 #include <Adafruit_TinyUSB.h>
 #include "MIDI.h"
 #include "audio/audio.h"
@@ -213,6 +214,8 @@ HmiThreadButtonHandler::HmiThreadButtonHandler(uint8_t _index) : index(_index) {
 
 
 void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
+    uint8_t oldKeyState = hmi_thread.keyState;
+
     switch (eventType) {
         case AceButton::kEventPressed:
             hmi_thread.keyState |= (1<<index);
@@ -226,12 +229,18 @@ void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, u
             hmi_thread.keyState &= ~(1<<index);
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_pressed_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].pressed[i], eventType);
-            }            
+            }
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_released_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].released[i], eventType);
             }
         break;
     }
+
+    // Handle keyState change for haptic position persistence
+    if (oldKeyState != hmi_thread.keyState) {
+        hmi_thread.handleKeyStateChange(oldKeyState, hmi_thread.keyState);
+    }
+
     KeyEvt keyEvt = { .type=eventType, .keyNum=(uint8_t)index, .keyState=hmi_thread.keyState };
     xQueueSend(hmi_thread._q_keyevt_out, &keyEvt, (TickType_t)0);
     hmi_thread.lastCheck = millis();
@@ -300,6 +309,62 @@ void HmiThread::handleKeyAction(keyAction& action, uint8_t eventType) {
     }
 };
 
+
+// Static strings for LCD description (must persist after function returns)
+static String lcdDescTitle = "";
+static String lcdDescData1 = "";
+
+void HmiThread::handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState) {
+    HapticProfile* profile = HapticProfileManager::getInstance().getCurrentProfile();
+    if (profile == nullptr) return;
+
+    // Determine position to save
+    // If a dispatch happened recently, FOC might not have processed it yet
+    // In that case, use the dispatched position instead of reading from FOC
+    int16_t save_pos;
+    if (millis() - last_dispatch_time < 20) {
+        // Recent dispatch - use the dispatched value (FOC might be stale)
+        save_pos = last_dispatched_pos;
+    } else {
+        // No recent dispatch - read from FOC
+        save_pos = foc_thread.pass_cur_pos();
+    }
+    profile->saved_knob_pos[oldKeyState] = save_pos;
+
+    // Find the knob config for the new keyState
+    knobValue* knobConfig = nullptr;
+    for (int i = 0; i < profile->hmi_config.knob.num; i++) {
+        if (profile->hmi_config.knob.values[i].key_state == newKeyState) {
+            knobConfig = &profile->hmi_config.knob.values[i];
+            break;
+        }
+    }
+
+    // Dispatch haptic config if we found one for this keyState
+    if (knobConfig != nullptr) {
+        int16_t restore_pos = profile->saved_knob_pos[newKeyState];
+        if (restore_pos == INT16_MIN) {
+            restore_pos = knobConfig->haptic.start_pos;
+        }
+        foc_thread.put_haptic_config(knobConfig->haptic, restore_pos);
+        last_dispatched_pos = restore_pos;
+        last_dispatch_time = millis();
+
+        // Update LCD with description if available
+        if (knobConfig->desc.length() > 0) {
+            lcdDescTitle = profile->profile_name;
+            lcdDescData1 = knobConfig->desc;
+            LcdCommand cmd;
+            cmd.type = LCD_LAYOUT_DEFAULT;
+            cmd.title = &lcdDescTitle;
+            cmd.data1 = &lcdDescData1;
+            cmd.data2 = nullptr;
+            cmd.data3 = nullptr;
+            cmd.data4 = nullptr;
+            lcd_thread.put_lcd_command(cmd);
+        }
+    }
+};
 
 
 void HmiThread::updateValue() {

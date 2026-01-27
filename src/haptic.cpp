@@ -71,14 +71,12 @@ void HapticState::load_profile(DetentProfile profile, int16_t new_position = INT
 
     if(new_position != INT16_MIN)
         current_pos = new_position;
-    else
-    {
-        // If no special handling of new position, check that we are in a valid region.
-        if(current_pos < profile.start_pos * isVernier)
-            current_pos = profile.start_pos;
-        else if(current_pos > profile.end_pos * isVernier)
-            current_pos = profile.end_pos;
-    }
+
+    // Always clamp position to valid range for this profile
+    if(current_pos < profile.start_pos * isVernier)
+        current_pos = profile.start_pos * isVernier;
+    else if(current_pos > profile.end_pos * isVernier)
+        current_pos = profile.end_pos * isVernier;
 
     last_pos = current_pos;
     detent_profile = profile;

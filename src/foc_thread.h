@@ -7,6 +7,11 @@
 #include "DeviceSettings.h"
 #include "audio/audio_api.h"
 
+// Struct for passing haptic config with optional position restore
+struct HapticConfigMsg {
+    DetentProfile profile;
+    int16_t restore_pos;  // Position to restore (INT16_MIN = use profile's start_pos)
+};
 
 class FocThread : public Thread<FocThread> {
     friend class Thread<FocThread>; //Allow Base Thread to invoke protected run()
@@ -19,7 +24,7 @@ class FocThread : public Thread<FocThread> {
         void init(DetentProfile& initialConfig);
 
         void put_motor_command(String* msg);
-        void put_haptic_config(DetentProfile& profile);
+        void put_haptic_config(DetentProfile& profile, int16_t restore_pos = INT16_MIN);
         bool get_angle_event(AngleEvt* evt);
     
 

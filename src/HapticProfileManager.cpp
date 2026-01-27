@@ -420,6 +420,10 @@ HapticProfile& HapticProfile::operator=(JsonObject& obj) {
         update_field(value, wrap, hmi_config.knob.values[i].wrap);
         update_field(value, step, hmi_config.knob.values[i].step);
         update_field(value, keyState, hmi_config.knob.values[i].key_state);
+        if (value["desc"].is<String>()) {
+          hmi_config.knob.values[i].desc = value["desc"].as<String>();
+          dirty = true;
+        }
         // haptics fields
         JsonObject haptic = value["haptic"].as<JsonObject>();
         if (haptic!=nullptr) {
@@ -639,6 +643,8 @@ void HapticProfile::toJSON(JsonObject& doc){
     value["wrap"] = hmi_config.knob.values[i].wrap;
     value["step"] = hmi_config.knob.values[i].step;
     value["keyState"] = hmi_config.knob.values[i].key_state;
+    if (hmi_config.knob.values[i].desc.length() > 0)
+      value["desc"] = hmi_config.knob.values[i].desc;
     // haptics fields
     JsonObject haptic = value["haptic"].to<JsonObject>();
     haptic["mode"] = hmi_config.knob.values[i].haptic.mode;

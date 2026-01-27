@@ -436,6 +436,13 @@ void ComThread::handleProfileCommand(JsonVariant profile, JsonVariant updates) {
 
 
 void ComThread::setCurrentProfile(String name){
+  // Save current position to old profile before switching (using current keyState)
+  HapticProfile* oldProfile = HapticProfileManager::getInstance().getCurrentProfile();
+  uint8_t keyState = hmi_thread.keyState;
+  if (oldProfile != nullptr) {
+    oldProfile->saved_knob_pos[keyState] = foc_thread.pass_cur_pos();
+  }
+
   HapticProfile* profile = HapticProfileManager::getInstance().setCurrentProfile(name);
   if (profile!=nullptr) { // if we changed profile, send the new haptic config to the FOC thread
     dispatchHapticConfig();
@@ -461,8 +468,24 @@ void ComThread::dispatchHmiConfig() {
 };
 
 void ComThread::dispatchHapticConfig() {
-  if (HapticProfileManager::getInstance().getCurrentProfile()->hmi_config.knob.num>0)
-    foc_thread.put_haptic_config(HapticProfileManager::getInstance().getCurrentProfile()->hmi_config.knob.values[0].haptic);
+  HapticProfile* curr = HapticProfileManager::getInstance().getCurrentProfile();
+  uint8_t keyState = hmi_thread.keyState;
+  if (curr->hmi_config.knob.num > 0) {
+    // Find the knob config for this keyState
+    DetentProfile* hapticConfig = nullptr;
+    for (int i = 0; i < curr->hmi_config.knob.num; i++) {
+      if (curr->hmi_config.knob.values[i].key_state == keyState) {
+        hapticConfig = &curr->hmi_config.knob.values[i].haptic;
+        break;
+      }
+    }
+    // Fall back to first knob config if no match for keyState
+    if (hapticConfig == nullptr) {
+      hapticConfig = &curr->hmi_config.knob.values[0].haptic;
+    }
+    // Pass the profile's saved position for this keyState
+    foc_thread.put_haptic_config(*hapticConfig, curr->saved_knob_pos[keyState]);
+  }
 };
 
 void ComThread::dispatchSettings() {
@@ -522,9 +545,22 @@ void ComThread::dispatchLcdConfig() {
     LcdCommand cmd;
     cmd.type = LCD_LAYOUT_DEFAULT;
     cmd.title = &curr->profile_name;
-    if (curr->profile_desc.length()>0)
+
+    // Prefer keyState 0's desc over profile desc for consistency with keyState switching
+    String* keyStateDesc = nullptr;
+    for (int i = 0; i < curr->hmi_config.knob.num; i++) {
+      if (curr->hmi_config.knob.values[i].key_state == 0 &&
+          curr->hmi_config.knob.values[i].desc.length() > 0) {
+        keyStateDesc = &curr->hmi_config.knob.values[i].desc;
+        break;
+      }
+    }
+
+    if (keyStateDesc != nullptr) {
+      cmd.data1 = keyStateDesc;
+    } else if (curr->profile_desc.length() > 0) {
       cmd.data1 = &curr->profile_desc;
-    else {
+    } else {
       autoDescription = generateDescription(*curr);
       cmd.data1 = &autoDescription;
     }
