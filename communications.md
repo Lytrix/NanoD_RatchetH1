@@ -283,13 +283,19 @@ Response confirms the activated profile:
 
 <hr>
 
-Delete or reorder the profiles, e.g. put the "Blender" profile first, the "default" profile last, and remove the "Fusion2 copy" profile:
+Delete profiles by sending a list of profiles to keep. Any profiles not in the list will be deleted. For example, to remove "Fusion2 copy" from the profiles list:
 
 ```json
 { "profiles": ["Blender", "Fusion", "Fusion2", "default"] }
 ```
 
-TODO what would be the best response?
+Response confirms the number of deleted profiles:
+
+```json
+{ "deleted": 1 }
+```
+
+Note: The active profile cannot be deleted. Switch to a different profile first if you need to delete the current one.
 
 ### Motor commands
 

@@ -312,25 +312,31 @@ void ComThread::handleProfilesCommand(JsonVariant p) {
   }
   if (p.is<JsonArray>()) {
     JsonArray arr = p.as<JsonArray>();
+    int deleted = 0;
     for (int i=0; i<MAX_PROFILES; i++) {
-      HapticProfile* p = pm[i];
-      if (p!=nullptr) {
+      HapticProfile* prof = pm[i];
+      if (prof!=nullptr) {
         bool found = false;
-        for (int i=0; i<arr.size(); i++) {
-          if (arr[i].is<String>()) {
-            String s = arr[i].as<String>();
-            if (s==p->profile_name) {
+        for (int j=0; j<arr.size(); j++) {
+          if (arr[j].is<String>()) {
+            String s = arr[j].as<String>();
+            if (s==prof->profile_name) {
               found = true;
               break;
             }
           }
         }
         if (!found) {
-          Serial.println("Deleting profile "+p->profile_name);
-          pm.remove(p->profile_name);
+          pm.remove(prof->profile_name);
+          deleted++;
         }
       }
     }
+    // Send response confirming deletion
+    JsonDocument doc;
+    doc["deleted"] = deleted;
+    serializeJson(doc, Serial);
+    Serial.println();
   }
   // TODO reorder profiles
 };
