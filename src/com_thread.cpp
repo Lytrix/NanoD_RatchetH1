@@ -545,9 +545,22 @@ void ComThread::dispatchLcdConfig() {
     LcdCommand cmd;
     cmd.type = LCD_LAYOUT_DEFAULT;
     cmd.title = &curr->profile_name;
-    if (curr->profile_desc.length()>0)
+
+    // Prefer keyState 0's desc over profile desc for consistency with keyState switching
+    String* keyStateDesc = nullptr;
+    for (int i = 0; i < curr->hmi_config.knob.num; i++) {
+      if (curr->hmi_config.knob.values[i].key_state == 0 &&
+          curr->hmi_config.knob.values[i].desc.length() > 0) {
+        keyStateDesc = &curr->hmi_config.knob.values[i].desc;
+        break;
+      }
+    }
+
+    if (keyStateDesc != nullptr) {
+      cmd.data1 = keyStateDesc;
+    } else if (curr->profile_desc.length() > 0) {
       cmd.data1 = &curr->profile_desc;
-    else {
+    } else {
       autoDescription = generateDescription(*curr);
       cmd.data1 = &autoDescription;
     }

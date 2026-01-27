@@ -1,6 +1,7 @@
 #include "hmi_thread.h"
 #include "com_thread.h"
 #include "foc_thread.h"
+#include "lcd_thread.h"
 #include <Adafruit_TinyUSB.h>
 #include "MIDI.h"
 #include "audio/audio.h"
@@ -309,6 +310,10 @@ void HmiThread::handleKeyAction(keyAction& action, uint8_t eventType) {
 };
 
 
+// Static strings for LCD description (must persist after function returns)
+static String lcdDescTitle = "";
+static String lcdDescData1 = "";
+
 void HmiThread::handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState) {
     HapticProfile* profile = HapticProfileManager::getInstance().getCurrentProfile();
     if (profile == nullptr) return;
@@ -326,24 +331,38 @@ void HmiThread::handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState) {
     }
     profile->saved_knob_pos[oldKeyState] = save_pos;
 
-    // Find the haptic config for the new keyState
-    DetentProfile* hapticConfig = nullptr;
+    // Find the knob config for the new keyState
+    knobValue* knobConfig = nullptr;
     for (int i = 0; i < profile->hmi_config.knob.num; i++) {
         if (profile->hmi_config.knob.values[i].key_state == newKeyState) {
-            hapticConfig = &profile->hmi_config.knob.values[i].haptic;
+            knobConfig = &profile->hmi_config.knob.values[i];
             break;
         }
     }
 
-    // Only dispatch if we found a config for this keyState
-    if (hapticConfig != nullptr) {
+    // Dispatch haptic config if we found one for this keyState
+    if (knobConfig != nullptr) {
         int16_t restore_pos = profile->saved_knob_pos[newKeyState];
         if (restore_pos == INT16_MIN) {
-            restore_pos = hapticConfig->start_pos;
+            restore_pos = knobConfig->haptic.start_pos;
         }
-        foc_thread.put_haptic_config(*hapticConfig, restore_pos);
+        foc_thread.put_haptic_config(knobConfig->haptic, restore_pos);
         last_dispatched_pos = restore_pos;
         last_dispatch_time = millis();
+
+        // Update LCD with description if available
+        if (knobConfig->desc.length() > 0) {
+            lcdDescTitle = profile->profile_name;
+            lcdDescData1 = knobConfig->desc;
+            LcdCommand cmd;
+            cmd.type = LCD_LAYOUT_DEFAULT;
+            cmd.title = &lcdDescTitle;
+            cmd.data1 = &lcdDescData1;
+            cmd.data2 = nullptr;
+            cmd.data3 = nullptr;
+            cmd.data4 = nullptr;
+            lcd_thread.put_lcd_command(cmd);
+        }
     }
 };
 
