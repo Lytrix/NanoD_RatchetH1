@@ -436,6 +436,12 @@ void ComThread::handleProfileCommand(JsonVariant profile, JsonVariant updates) {
 
 
 void ComThread::setCurrentProfile(String name){
+  // Save current position to old profile before switching
+  HapticProfile* oldProfile = HapticProfileManager::getInstance().getCurrentProfile();
+  if (oldProfile != nullptr) {
+    oldProfile->saved_knob_pos = foc_thread.pass_cur_pos();
+  }
+
   HapticProfile* profile = HapticProfileManager::getInstance().setCurrentProfile(name);
   if (profile!=nullptr) { // if we changed profile, send the new haptic config to the FOC thread
     dispatchHapticConfig();
@@ -461,8 +467,11 @@ void ComThread::dispatchHmiConfig() {
 };
 
 void ComThread::dispatchHapticConfig() {
-  if (HapticProfileManager::getInstance().getCurrentProfile()->hmi_config.knob.num>0)
-    foc_thread.put_haptic_config(HapticProfileManager::getInstance().getCurrentProfile()->hmi_config.knob.values[0].haptic);
+  HapticProfile* curr = HapticProfileManager::getInstance().getCurrentProfile();
+  if (curr->hmi_config.knob.num > 0) {
+    // Pass the profile's saved position (INT16_MIN means use start_pos)
+    foc_thread.put_haptic_config(curr->hmi_config.knob.values[0].haptic, curr->saved_knob_pos);
+  }
 };
 
 void ComThread::dispatchSettings() {

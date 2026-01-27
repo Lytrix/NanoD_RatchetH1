@@ -50,6 +50,9 @@ public:
     hmiConfig hmi_config;
     audioConfig audio_config;
 
+    // Saved knob position for this profile (INT16_MIN = use profile's start_pos)
+    int16_t saved_knob_pos = INT16_MIN;
+
     // gui config - just one variable for now
     bool gui_enable;
     /* 

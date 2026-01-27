@@ -23,7 +23,7 @@ HapticCommander commander = HapticCommander(&motor);
 
 FocThread::FocThread(const uint8_t task_core) : Thread("FOC", 8192, 1, task_core) {
     _q_motor_in = xQueueCreate(5, sizeof( String* ));
-    _q_haptic_in = xQueueCreate(2, sizeof( DetentProfile ));
+    _q_haptic_in = xQueueCreate(2, sizeof( HapticConfigMsg ));
     _q_angleevt_out = xQueueCreate(5, sizeof( AngleEvt ));
     assert(_q_motor_in != NULL);
     assert(_q_haptic_in != NULL);
@@ -94,8 +94,9 @@ void FocThread::put_motor_command(String* message) {
 };
 
 
-void FocThread::put_haptic_config(DetentProfile& profile) {
-    xQueueSend(_q_haptic_in, &profile, (TickType_t)0);
+void FocThread::put_haptic_config(DetentProfile& profile, int16_t restore_pos) {
+    HapticConfigMsg msg = { profile, restore_pos };
+    xQueueSend(_q_haptic_in, &msg, (TickType_t)0);
 };
 
 
@@ -156,10 +157,17 @@ void FocThread::handleMessage() {
 
 
 void FocThread::handleHapticConfig() {
-    DetentProfile profile;
-    if (xQueueReceive(_q_haptic_in, &profile, (TickType_t)0)) {
-        // apply haptic config to motor
-        haptic.haptic_state = HapticState(profile);
+    HapticConfigMsg msg;
+    if (xQueueReceive(_q_haptic_in, &msg, (TickType_t)0)) {
+        // Use restore_pos if set, otherwise use profile's start_pos
+        int16_t pos = (msg.restore_pos != INT16_MIN) ? msg.restore_pos : msg.profile.start_pos;
+        haptic.haptic_state = HapticState(msg.profile, pos);
+
+        // Sync attract_angle to motor's current physical position to prevent spurious detent events
+        float angle = haptic.motor->shaft_angle;
+        float detent_width = haptic.haptic_state.detent_width;
+        haptic.haptic_state.attract_angle = round(angle / detent_width) * detent_width;
+        haptic.haptic_state.last_attract_angle = haptic.haptic_state.attract_angle;
     }
 };
 
