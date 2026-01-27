@@ -93,6 +93,7 @@ class HmiThread : public Thread<HmiThread> {
 
         // button handler
         void handleKeyAction(keyAction& action, uint8_t eventType);
+        void handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState);
         void handleHid();
 
         // knob
@@ -102,6 +103,10 @@ class HmiThread : public Thread<HmiThread> {
 
         // HMI config epoch - incremented on profile switch to reset stateful outputs
         uint32_t hmi_config_epoch = 0;
+
+        // Track dispatched position for keyState changes (handles async FOC updates)
+        int16_t last_dispatched_pos = 0;
+        unsigned long last_dispatch_time = 0;
 
         // midi config
         void handleMidi();

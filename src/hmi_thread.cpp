@@ -213,6 +213,8 @@ HmiThreadButtonHandler::HmiThreadButtonHandler(uint8_t _index) : index(_index) {
 
 
 void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
+    uint8_t oldKeyState = hmi_thread.keyState;
+
     switch (eventType) {
         case AceButton::kEventPressed:
             hmi_thread.keyState |= (1<<index);
@@ -226,12 +228,18 @@ void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, u
             hmi_thread.keyState &= ~(1<<index);
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_pressed_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].pressed[i], eventType);
-            }            
+            }
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_released_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].released[i], eventType);
             }
         break;
     }
+
+    // Handle keyState change for haptic position persistence
+    if (oldKeyState != hmi_thread.keyState) {
+        hmi_thread.handleKeyStateChange(oldKeyState, hmi_thread.keyState);
+    }
+
     KeyEvt keyEvt = { .type=eventType, .keyNum=(uint8_t)index, .keyState=hmi_thread.keyState };
     xQueueSend(hmi_thread._q_keyevt_out, &keyEvt, (TickType_t)0);
     hmi_thread.lastCheck = millis();
@@ -300,6 +308,44 @@ void HmiThread::handleKeyAction(keyAction& action, uint8_t eventType) {
     }
 };
 
+
+void HmiThread::handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState) {
+    HapticProfile* profile = HapticProfileManager::getInstance().getCurrentProfile();
+    if (profile == nullptr) return;
+
+    // Determine position to save
+    // If a dispatch happened recently, FOC might not have processed it yet
+    // In that case, use the dispatched position instead of reading from FOC
+    int16_t save_pos;
+    if (millis() - last_dispatch_time < 20) {
+        // Recent dispatch - use the dispatched value (FOC might be stale)
+        save_pos = last_dispatched_pos;
+    } else {
+        // No recent dispatch - read from FOC
+        save_pos = foc_thread.pass_cur_pos();
+    }
+    profile->saved_knob_pos[oldKeyState] = save_pos;
+
+    // Find the haptic config for the new keyState
+    DetentProfile* hapticConfig = nullptr;
+    for (int i = 0; i < profile->hmi_config.knob.num; i++) {
+        if (profile->hmi_config.knob.values[i].key_state == newKeyState) {
+            hapticConfig = &profile->hmi_config.knob.values[i].haptic;
+            break;
+        }
+    }
+
+    // Only dispatch if we found a config for this keyState
+    if (hapticConfig != nullptr) {
+        int16_t restore_pos = profile->saved_knob_pos[newKeyState];
+        if (restore_pos == INT16_MIN) {
+            restore_pos = hapticConfig->start_pos;
+        }
+        foc_thread.put_haptic_config(*hapticConfig, restore_pos);
+        last_dispatched_pos = restore_pos;
+        last_dispatch_time = millis();
+    }
+};
 
 
 void HmiThread::updateValue() {
