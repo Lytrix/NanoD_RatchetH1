@@ -80,7 +80,8 @@ typedef enum {
     KV_GAMEPAD = 2,
     KV_MIDI = 3,
     KV_ACTIONS = 4,
-    KV_DEVICE_PROFILES = 5 
+    KV_DEVICE_PROFILES = 5,
+    KV_PITCHBEND = 6
 } knobValueType;
 
 
@@ -109,7 +110,9 @@ typedef struct {
                         //       if steps is 1, integer values are returned
     bool recenter;      // if true, angle_min and angle_max are recalculated to be centred around the current angle
                         // if false, angle_min and angle_max are used as provided
-    
+
+    String desc = "";   // description shown on LCD when this knob value is active
+
     // note: if min > max for either value or angle, the value will be negatively correlated to the knob angle
     // note: if wrap is false, and the knob is turned outside the min-max range, the value will be clamped to the min-max range
     // note: if wrap is true, and angle_max-angle_min is not a multiple of 2PI, there will be a dead zone between 

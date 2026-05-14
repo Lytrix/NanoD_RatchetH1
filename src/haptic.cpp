@@ -55,33 +55,35 @@ HapticState::HapticState(DetentProfile profile){
     load_profile(profile, profile.start_pos);
 };
 
-HapticState::HapticState(DetentProfile profile, uint16_t position){
+HapticState::HapticState(DetentProfile profile, int16_t position){
     load_profile(profile, position);
 };
 
-void HapticState::load_profile(DetentProfile profile, uint16_t new_position = 0xFFFF){
-    
-    uint16_t isVernier = profile.mode == HapticMode::VERNIER ? profile.vernier : 1;
-   
+void HapticState::load_profile(DetentProfile profile, int16_t new_position = INT16_MIN){
+
+    int16_t isVernier = profile.mode == HapticMode::VERNIER ? profile.vernier : 1;
+
     num_detents = profile.end_pos - profile.start_pos;
     detent_width = _2PI / profile.detent_count;
 
     if(profile.mode == HapticMode::VERNIER)
         detent_width /= profile.vernier;
 
-    if(new_position != 0xFFFF)
+    if(new_position != INT16_MIN)
         current_pos = new_position;
-    else
-    {
-        // If no special handling of new position, check that we are in a valid region.
-        if(current_pos < profile.start_pos * isVernier)
-            current_pos = profile.start_pos;
-        else if(current_pos > profile.end_pos * isVernier)
-            current_pos = profile.end_pos;
-    }
+
+    // Always clamp position to valid range for this profile
+    if(current_pos < profile.start_pos * isVernier)
+        current_pos = profile.start_pos * isVernier;
+    else if(current_pos > profile.end_pos * isVernier)
+        current_pos = profile.end_pos * isVernier;
 
     last_pos = current_pos;
     detent_profile = profile;
+
+    // Apply detent strength from profile (if set, otherwise keep default)
+    if(profile.detent_strength > 0)
+        detent_strength_unit = profile.detent_strength;
 }
 
 HapticState::~HapticState() {};
@@ -175,6 +177,56 @@ void HapticInterface::offset_detent(void){
 void HapticInterface::find_detent(void)
 {
     /**
+     * PITCHWHEEL mode: Always attract to center (0). The motor constantly pulls
+     * back toward the center point, like a pitch wheel on a MIDI keyboard.
+     * Position is still tracked for value output.
+     * Physical range is configurable via angle_range (default: π/2 = quarter turn each direction).
+     */
+    if(haptic_state.detent_profile.mode == HapticMode::PITCHWHEEL){
+        // Keep attract_angle fixed at center
+        haptic_state.attract_angle = 0.0;
+        haptic_state.last_attract_angle = 0.0;
+
+        // Use configured angle range, or default to quarter turn (π/2 radians)
+        float max_angle = haptic_state.detent_profile.angle_range;
+        if(max_angle <= 0.0f) max_angle = _PI / 2.0f;
+
+        // Calculate position based on current angle
+        int16_t center_pos = (haptic_state.detent_profile.start_pos + haptic_state.detent_profile.end_pos) / 2;
+        int16_t half_range = (haptic_state.detent_profile.end_pos - haptic_state.detent_profile.start_pos) / 2;
+
+        // Map angle to position: normalized angle (-1 to +1) * half_range + center
+        float normalized = motor->shaft_angle / max_angle;
+        if(normalized > 1.0f) normalized = 1.0f;
+        if(normalized < -1.0f) normalized = -1.0f;
+
+        int16_t new_pos = center_pos + (int16_t)(normalized * half_range);
+
+        // Clamp to valid range
+        if(new_pos < haptic_state.detent_profile.start_pos)
+            new_pos = haptic_state.detent_profile.start_pos;
+        if(new_pos > haptic_state.detent_profile.end_pos)
+            new_pos = haptic_state.detent_profile.end_pos;
+
+        // Fire events on position change
+        if(new_pos != haptic_state.current_pos){
+            haptic_state.last_pos = haptic_state.current_pos;
+            haptic_state.current_pos = new_pos;
+
+            if(new_pos > haptic_state.last_pos)
+                HapticEventCallback(HapticEvt::INCREASE);
+            else
+                HapticEventCallback(HapticEvt::DECREASE);
+        }
+
+        // PITCHWHEEL always needs spring force active - clear limit flags
+        // to prevent correct_pid from forcing P=0
+        haptic_state.atLimit = false;
+        haptic_state.wasAtLimit = false;
+        return;
+    }
+
+    /**
      * hysteresisType is used to handle whether the detents are linear in strength or progressively stronger.
      * We then generate new bounds for the detent based on the hysteresis (as a percentage)
     */
@@ -218,8 +270,8 @@ void HapticInterface::find_detent(void)
 */
 void HapticInterface::detent_handler(void){
     // Logic for handling detent update events.
-    uint16_t effective_start_pos = haptic_state.detent_profile.start_pos;
-    uint16_t effective_end_pos = haptic_state.detent_profile.end_pos;
+    int16_t effective_start_pos = haptic_state.detent_profile.start_pos;
+    int16_t effective_end_pos = haptic_state.detent_profile.end_pos;
 
     if(haptic_state.detent_profile.mode == HapticMode::VERNIER){
         effective_start_pos *= haptic_state.detent_profile.vernier;

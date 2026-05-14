@@ -196,10 +196,15 @@ The response includes all profile fields, and would arrive in one line, but is s
 
 Values for haptic mode:
 
- - REGULAR = 0,    //Only coarse detents used
+ - REGULAR = 0,    // Only coarse detents used
  - VERNIER = 1,    // Coarse with fine between
  - VISCOSE = 2,    // Resistance while turning
- - SPRING = 3     // Snap back to center point
+ - SPRING = 3,     // Oscillating spring physics
+ - PITCHWHEEL = 4  // Snap back to center (like MIDI pitch bend wheel)
+
+Knob output types:
+ - midi        // 7-bit MIDI CC (0-127)
+ - pitchBend   // 14-bit MIDI Pitch Bend (-8192 to +8191)
 
 
 Changing profiles from keys:
@@ -270,17 +275,27 @@ Set the current profile:
 { "current": "Fusion2" }
 ```
 
-TODO what would be the best response?
+Response confirms the activated profile:
+
+```json
+{ "current": "Fusion2" }
+```
 
 <hr>
 
-Delete or reorder the profiles, e.g. put the "Blender" profile first, the "default" profile last, and remove the "Fusion2 copy" profile:
+Delete profiles by sending a list of profiles to keep. Any profiles not in the list will be deleted. For example, to remove "Fusion2 copy" from the profiles list:
 
 ```json
 { "profiles": ["Blender", "Fusion", "Fusion2", "default"] }
 ```
 
-TODO what would be the best response?
+Response confirms the number of deleted profiles:
+
+```json
+{ "deleted": 1 }
+```
+
+Note: The active profile cannot be deleted. Switch to a different profile first if you need to delete the current one.
 
 ### Motor commands
 

@@ -1,6 +1,7 @@
 #include "hmi_thread.h"
 #include "com_thread.h"
 #include "foc_thread.h"
+#include "lcd_thread.h"
 #include <Adafruit_TinyUSB.h>
 #include "MIDI.h"
 #include "audio/audio.h"
@@ -110,6 +111,7 @@ void HmiThread::handleConfig() {
     hmiConfig newHmiConfig;
     if (xQueueReceive(_q_hmi_config_in, &newHmiConfig, (TickType_t)0)) {
         hmi_config = newHmiConfig;
+        hmi_config_epoch++; // Signal profile change to reset stateful outputs
     }
 };
 
@@ -212,6 +214,8 @@ HmiThreadButtonHandler::HmiThreadButtonHandler(uint8_t _index) : index(_index) {
 
 
 void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, uint8_t buttonState) {
+    uint8_t oldKeyState = hmi_thread.keyState;
+
     switch (eventType) {
         case AceButton::kEventPressed:
             hmi_thread.keyState |= (1<<index);
@@ -225,12 +229,18 @@ void HmiThreadButtonHandler::handleEvent(AceButton* button, uint8_t eventType, u
             hmi_thread.keyState &= ~(1<<index);
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_pressed_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].pressed[i], eventType);
-            }            
+            }
             for (int i=0; i<hmi_thread.hmi_config.keys[index].num_released_actions; i++) {
                 hmi_thread.handleKeyAction(hmi_thread.hmi_config.keys[index].released[i], eventType);
             }
         break;
     }
+
+    // Handle keyState change for haptic position persistence
+    if (oldKeyState != hmi_thread.keyState) {
+        hmi_thread.handleKeyStateChange(oldKeyState, hmi_thread.keyState);
+    }
+
     KeyEvt keyEvt = { .type=eventType, .keyNum=(uint8_t)index, .keyState=hmi_thread.keyState };
     xQueueSend(hmi_thread._q_keyevt_out, &keyEvt, (TickType_t)0);
     hmi_thread.lastCheck = millis();
@@ -300,6 +310,62 @@ void HmiThread::handleKeyAction(keyAction& action, uint8_t eventType) {
 };
 
 
+// Static strings for LCD description (must persist after function returns)
+static String lcdDescTitle = "";
+static String lcdDescData1 = "";
+
+void HmiThread::handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState) {
+    HapticProfile* profile = HapticProfileManager::getInstance().getCurrentProfile();
+    if (profile == nullptr) return;
+
+    // Determine position to save
+    // If a dispatch happened recently, FOC might not have processed it yet
+    // In that case, use the dispatched position instead of reading from FOC
+    int16_t save_pos;
+    if (millis() - last_dispatch_time < 20) {
+        // Recent dispatch - use the dispatched value (FOC might be stale)
+        save_pos = last_dispatched_pos;
+    } else {
+        // No recent dispatch - read from FOC
+        save_pos = foc_thread.pass_cur_pos();
+    }
+    profile->saved_knob_pos[oldKeyState] = save_pos;
+
+    // Find the knob config for the new keyState
+    knobValue* knobConfig = nullptr;
+    for (int i = 0; i < profile->hmi_config.knob.num; i++) {
+        if (profile->hmi_config.knob.values[i].key_state == newKeyState) {
+            knobConfig = &profile->hmi_config.knob.values[i];
+            break;
+        }
+    }
+
+    // Dispatch haptic config if we found one for this keyState
+    if (knobConfig != nullptr) {
+        int16_t restore_pos = profile->saved_knob_pos[newKeyState];
+        if (restore_pos == INT16_MIN) {
+            restore_pos = knobConfig->haptic.start_pos;
+        }
+        foc_thread.put_haptic_config(knobConfig->haptic, restore_pos);
+        last_dispatched_pos = restore_pos;
+        last_dispatch_time = millis();
+
+        // Update LCD with description if available
+        if (knobConfig->desc.length() > 0) {
+            lcdDescTitle = profile->profile_name;
+            lcdDescData1 = knobConfig->desc;
+            LcdCommand cmd;
+            cmd.type = LCD_LAYOUT_DEFAULT;
+            cmd.title = &lcdDescTitle;
+            cmd.data1 = &lcdDescData1;
+            cmd.data2 = nullptr;
+            cmd.data3 = nullptr;
+            cmd.data4 = nullptr;
+            lcd_thread.put_lcd_command(cmd);
+        }
+    }
+};
+
 
 void HmiThread::updateValue() {
     if (hmi_config.knob.num>0) {
@@ -325,7 +391,53 @@ void HmiThread::updateValue() {
                 }
                 currentValue = value;
                 currentValue = foc_thread.pass_cur_pos(); // TODO fix and remove this in future
-                if (currentValue!=lastValue) {
+
+                if (v.type==knobValueType::KV_PITCHBEND) {
+                    // Use position from haptic system so display matches output
+                    static int16_t lastPitchBend = 0;
+                    static uint32_t lastPitchBendEpoch = 0; // Track config changes
+
+                    int16_t pos = foc_thread.pass_cur_pos();
+                    int16_t start = foc_thread.pass_start_pos();
+                    int16_t end = foc_thread.pass_end_pos();
+                    int32_t center = ((int32_t)start + (int32_t)end) / 2;
+                    int32_t half_range = ((int32_t)end - (int32_t)start) / 2;
+
+                    // Map position to pitch bend range (-8192 to 8191)
+                    int16_t pb_value = 0;
+                    if (half_range > 0) {
+                        int32_t offset = (int32_t)pos - center;
+                        pb_value = (int16_t)((offset * 8191L) / half_range);
+                    }
+                    // Clamp to valid pitch bend range
+                    if (pb_value > 8191) pb_value = 8191;
+                    if (pb_value < -8192) pb_value = -8192;
+
+                    // Force send on profile switch (epoch change) to sync host state
+                    bool configChanged = (hmi_config_epoch != lastPitchBendEpoch);
+                    if (configChanged) {
+                        lastPitchBendEpoch = hmi_config_epoch;
+                        lastPitchBend = pb_value; // Reset state
+                        // Always send current value on config change
+                        if (midiUsbSettings.nano)
+                            midiu.sendPitchBend(pb_value, v.midi.channel);
+                        if (midi2Settings.nano)
+                            midi2.sendPitchBend(pb_value, v.midi.channel);
+                    }
+                    else {
+                        // Deadband to filter motor noise
+                        int16_t diff = pb_value - lastPitchBend;
+                        if (diff < 0) diff = -diff;
+                        if (diff > 50) {
+                            if (midiUsbSettings.nano)
+                                midiu.sendPitchBend(pb_value, v.midi.channel);
+                            if (midi2Settings.nano)
+                                midi2.sendPitchBend(pb_value, v.midi.channel);
+                            lastPitchBend = pb_value;
+                        }
+                    }
+                }
+                else if (currentValue!=lastValue) {
                     if (v.type==knobValueType::KV_MIDI) {
                         uint8_t midi_value = (uint8_t)(currentValue);
                         midi_value = _constrain(midi_value, 0, 127);
@@ -440,9 +552,9 @@ void HmiThread::updateKeyLeds() {
 
 void HmiThread::updateLeds() {
     // TODO: optimise this
-    uint16_t cur_pos = foc_thread.pass_cur_pos();
-    uint16_t start_pos = foc_thread.pass_start_pos();
-    uint16_t end_pos = foc_thread.pass_end_pos();
+    int16_t cur_pos = foc_thread.pass_cur_pos();
+    int16_t start_pos = foc_thread.pass_start_pos();
+    int16_t end_pos = foc_thread.pass_end_pos();
     uint8_t device_orientation = DeviceSettings::getInstance().deviceOrientation;
     uint8_t led_orientation = map(device_orientation, 0, 3, 0, 135);
     uint16_t point = map(cur_pos, end_pos, start_pos, 0, NANO_LED_A_NUM - 1);

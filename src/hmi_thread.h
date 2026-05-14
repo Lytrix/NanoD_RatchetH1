@@ -73,7 +73,7 @@ class HmiThread : public Thread<HmiThread> {
         CRGB leds[NANO_LED_A_NUM];
         CRGB ledsp[NANO_LED_B_NUM];
         unsigned long lastCheck = 0;
-        uint16_t last_pos = -1;
+        int16_t last_pos = INT16_MIN;
         bool isIdle = false;
         void updateKeyLeds();
         void updateLeds();
@@ -93,12 +93,20 @@ class HmiThread : public Thread<HmiThread> {
 
         // button handler
         void handleKeyAction(keyAction& action, uint8_t eventType);
+        void handleKeyStateChange(uint8_t oldKeyState, uint8_t newKeyState);
         void handleHid();
 
         // knob
         float lastValue;
         float currentValue;
         void updateValue();
+
+        // HMI config epoch - incremented on profile switch to reset stateful outputs
+        uint32_t hmi_config_epoch = 0;
+
+        // Track dispatched position for keyState changes (handles async FOC updates)
+        int16_t last_dispatched_pos = 0;
+        unsigned long last_dispatch_time = 0;
 
         // midi config
         void handleMidi();

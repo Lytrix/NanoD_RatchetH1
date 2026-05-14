@@ -420,6 +420,10 @@ HapticProfile& HapticProfile::operator=(JsonObject& obj) {
         update_field(value, wrap, hmi_config.knob.values[i].wrap);
         update_field(value, step, hmi_config.knob.values[i].step);
         update_field(value, keyState, hmi_config.knob.values[i].key_state);
+        if (value["desc"].is<String>()) {
+          hmi_config.knob.values[i].desc = value["desc"].as<String>();
+          dirty = true;
+        }
         // haptics fields
         JsonObject haptic = value["haptic"].as<JsonObject>();
         if (haptic!=nullptr) {
@@ -431,12 +435,21 @@ HapticProfile& HapticProfile::operator=(JsonObject& obj) {
           update_field(haptic, kxForce, hmi_config.knob.values[i].haptic.kxForce);
           update_field(haptic, outputRamp, hmi_config.knob.values[i].haptic.output_ramp);
           update_field(haptic, detentStrength, hmi_config.knob.values[i].haptic.detent_strength);
+          // pitchRange is specified in turns (0.25 = quarter turn), convert to radians
+          if (!haptic["pitchRange"].isNull()) {
+            hmi_config.knob.values[i].haptic.angle_range = haptic["pitchRange"].as<float>() * _2PI;
+            dirty = true;
+          }
         }
         String type = value["type"].as<String>();
         if (type=="midi") {
           hmi_config.knob.values[i].type = knobValueType::KV_MIDI;
           update_field(value, channel, hmi_config.knob.values[i].midi.channel);
           update_field(value, cc, hmi_config.knob.values[i].midi.cc);
+        }
+        else if (type=="pitchBend") {
+          hmi_config.knob.values[i].type = knobValueType::KV_PITCHBEND;
+          update_field(value, channel, hmi_config.knob.values[i].midi.channel);
         }
         else if (type=="mouse") {
           hmi_config.knob.values[i].type = knobValueType::KV_MOUSE;
@@ -630,6 +643,8 @@ void HapticProfile::toJSON(JsonObject& doc){
     value["wrap"] = hmi_config.knob.values[i].wrap;
     value["step"] = hmi_config.knob.values[i].step;
     value["keyState"] = hmi_config.knob.values[i].key_state;
+    if (hmi_config.knob.values[i].desc.length() > 0)
+      value["desc"] = hmi_config.knob.values[i].desc;
     // haptics fields
     JsonObject haptic = value["haptic"].to<JsonObject>();
     haptic["mode"] = hmi_config.knob.values[i].haptic.mode;
@@ -640,11 +655,18 @@ void HapticProfile::toJSON(JsonObject& doc){
     haptic["kxForce"] = hmi_config.knob.values[i].haptic.kxForce;
     haptic["outputRamp"] = hmi_config.knob.values[i].haptic.output_ramp;
     haptic["detentStrength"] = hmi_config.knob.values[i].haptic.detent_strength;
+    // pitchRange: convert from radians to turns for output
+    if (hmi_config.knob.values[i].haptic.angle_range > 0)
+      haptic["pitchRange"] = hmi_config.knob.values[i].haptic.angle_range / _2PI;
     switch (hmi_config.knob.values[i].type) {
       case knobValueType::KV_MIDI:
         value["type"] = "midi";
         value["channel"] = hmi_config.knob.values[i].midi.channel;
         value["cc"] = hmi_config.knob.values[i].midi.cc;
+        break;
+      case knobValueType::KV_PITCHBEND:
+        value["type"] = "pitchBend";
+        value["channel"] = hmi_config.knob.values[i].midi.channel;
         break;
       case knobValueType::KV_MOUSE:
         value["type"] = "mouse";

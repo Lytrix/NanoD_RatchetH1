@@ -19,7 +19,7 @@ class HapticState
 public:
     HapticState(void);
     HapticState(DetentProfile profile);
-    HapticState(DetentProfile profile, uint16_t positon);
+    HapticState(DetentProfile profile, int16_t positon);
     ~HapticState();
 
     DetentProfile detent_profile;
@@ -27,8 +27,8 @@ public:
     DetentProfile DefaultVernierProfile;
     DetentProfile TempProfile;
 
-    uint16_t current_pos = 0;
-    uint16_t last_pos = 0; 
+    int16_t current_pos = 0;
+    int16_t last_pos = 0; 
 
     float attract_angle = 0.0; 
     float last_attract_angle = 0.0;
@@ -44,7 +44,7 @@ public:
     uint16_t num_detents;
     float detent_width;
 
-    void load_profile(DetentProfile, uint16_t);
+    void load_profile(DetentProfile, int16_t);
 };
 
 class HapticInterface
@@ -62,7 +62,7 @@ public:
     void init(void);
     void haptic_loop(void);
     void HapticEventCallback(HapticEvt);
-    void UserHapticEventCallback(HapticEvt, float, uint16_t);
+    void UserHapticEventCallback(HapticEvt, float, int16_t);
 
 private:
     void offset_detent(void);

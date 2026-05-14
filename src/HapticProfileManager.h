@@ -50,6 +50,15 @@ public:
     hmiConfig hmi_config;
     audioConfig audio_config;
 
+    // Saved knob positions per keyState (INT16_MIN = use profile's start_pos)
+    // Index is keyState (0-15), supporting up to 4 buttons
+    int16_t saved_knob_pos[16] = {
+        INT16_MIN, INT16_MIN, INT16_MIN, INT16_MIN,
+        INT16_MIN, INT16_MIN, INT16_MIN, INT16_MIN,
+        INT16_MIN, INT16_MIN, INT16_MIN, INT16_MIN,
+        INT16_MIN, INT16_MIN, INT16_MIN, INT16_MIN
+    };
+
     // gui config - just one variable for now
     bool gui_enable;
     /* 
